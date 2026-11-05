@@ -98,6 +98,39 @@ Because Prisma connects with the database user, it **bypasses Supabase Row Level
 
 > `prisma migrate dev` needs to create a shadow database. On a hosted Supabase project that may fail; run migrations against the local stack or a development branch, and apply them with `pnpm db:deploy` elsewhere.
 
+## API
+
+The CRUD is modular and layered: each feature under `src/<feature>/` is a Nest module split into `controller` (HTTP only) → `service` (rules, 404s) → `repository` (every Prisma query). `PrismaModule` and `SupabaseModule` are global, so feature modules only inject `PrismaService`.
+
+| Method | Route | Notes |
+| --- | --- | --- |
+| `GET` | `/familias?q=&limit=&offset=` | `q` searches `nombre` |
+| `GET` | `/familias/:id` | |
+| `POST` | `/familias` | `201` |
+| `PATCH` | `/familias/:id` | |
+| `DELETE` | `/familias/:id` | `204`; `409` while it has especies |
+| `GET` | `/especies?familiaId=&q=&limit=&offset=` | includes `familia` |
+| `GET` | `/especies/:id` | includes `familia` |
+| `POST` `PATCH` `DELETE` | `/especies` … | |
+| `GET` | `/plantas?especieId=&q=&limit=&offset=` | includes `especie` + `familia` |
+| `GET` | `/plantas/:id` | includes `especie` + `familia` |
+| `POST` `PATCH` `DELETE` | `/plantas` … | |
+| `GET` | `/flora?plantaId=&estado=&limit=&offset=` | ordered by plate number |
+| `GET` | `/flora/:id` | includes `planta` + `especie` + `familia` |
+| `POST` `PATCH` `DELETE` | `/flora` … | `id` is the plate number; immutable |
+
+Lists return `{ data, total, limit, offset }`; `limit` is capped at 100 (default 20). Bodies are validated with `class-validator` by a global `ValidationPipe` (`whitelist` + `forbidNonWhitelisted`), so unknown fields are rejected with `400`. Prisma's constraint errors are mapped by `PrismaExceptionFilter`: `409` for duplicated unique values or FK violations, `404` for missing rows.
+
+```bash
+curl -X POST localhost:3000/flora \
+  -H 'content-type: application/json' \
+  -d '{"id":50,"plantaId":1,"latitud":4.60971,"longitud":-74.08175,"estado":"vivo"}'
+```
+
+Flora coordinates are stored as `decimal(9,6)` but returned as JSON numbers, and `estado` defaults to `vivo` in the database when omitted.
+
+> There is no authentication on these routes yet, and Prisma bypasses Row Level Security: anyone who can reach the API can write. Add a guard (Supabase JWT) before exposing it outside your network.
+
 ## Compile and run the project
 
 ```bash
