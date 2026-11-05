@@ -170,6 +170,25 @@ $ mau deploy
 
 With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
 
+### Vercel
+
+Vercel runs the API as a single serverless function instead of a container:
+
+- `api/index.mjs` is the entrypoint. It boots the Nest app once per lambda instance, then reuses the Express instance for every request.
+- `vercel.json` sets `buildCommand: pnpm build` (the function imports the compiled `dist/` output) and rewrites every route to `/api/index`.
+- `.vercelignore` keeps `.env` and local artifacts out of the upload.
+
+1. Import the repository in Vercel. It picks pnpm from `pnpm-lock.yaml`.
+2. In **Project → Settings → Environment Variables**, add `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `DATABASE_URL` (the pooled connection, port `6543`). `SUPABASE_SERVICE_ROLE_KEY` is optional. `DIRECT_URL` is only needed if you run migrations from CI.
+3. Deploy. Locally, `pnpm start:dev` keeps using `src/main.ts`; `api/index.mjs` is only used by Vercel.
+
+Notes:
+
+- Apply migrations from your machine or CI with `pnpm db:deploy`. The function has no Prisma CLI and never uses `DIRECT_URL`.
+- `regions: ["iad1"]` in `vercel.json` matches the Supabase project (`us-east-1`). Change both together.
+- Each lambda instance keeps its own `pg` pool against the Supabase pooler, which is why `DATABASE_URL` must be the pooled URL (port `6543`, `pgbouncer=true`).
+- Cold starts initialize Nest + Prisma on the first request after idle. `GET /health` probes the Supabase REST API, so it can return `503` even when Postgres queries work.
+
 ## Observability
 
 In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
