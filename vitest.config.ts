@@ -8,5 +8,11 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.spec.ts'],
+    // The app validates these at boot; tests must not depend on a local .env.
+    env: {
+      SUPABASE_URL: 'http://127.0.0.1:54321',
+      SUPABASE_ANON_KEY: 'test-anon-key',
+      DATABASE_URL: 'postgresql://postgres:postgres@127.0.0.1:54322/postgres',
+    },
   },
 });

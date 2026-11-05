@@ -31,6 +31,73 @@
 $ pnpm install
 ```
 
+## Supabase
+
+The app talks to Supabase through `SupabaseService` (`src/supabase/supabase.service.ts`), registered globally by `SupabaseModule`. It reads its configuration from the environment, validated at boot by `src/config/env.validation.ts`.
+
+1. Create an account and a project at [supabase.com](https://supabase.com) (or run the stack locally with `pnpm supabase:start`).
+2. Copy the template and fill in the values from **Project Settings → API**:
+
+   ```bash
+   $ cp .env.example .env
+   ```
+
+   | Variable | Required | Purpose |
+   | --- | --- | --- |
+   | `SUPABASE_URL` | yes | Project REST endpoint |
+   | `SUPABASE_ANON_KEY` | yes | Anon client; every query goes through Row Level Security |
+   | `SUPABASE_SERVICE_ROLE_KEY` | no | Admin client; bypasses RLS, server-side only |
+
+3. Check the connection: `GET /health` returns `{ "status": "ok", "supabase": "up" }`, or `503` when the project is unreachable.
+
+Use it from any provider or controller:
+
+```ts
+constructor(private readonly supabase: SupabaseService) {}
+
+const { data, error } = await this.supabase.client.from('plants').select();
+await this.supabase.admin.auth.admin.listUsers(); // requires the service role key
+```
+
+The clients are created with `persistSession`, `autoRefreshToken` and `detectSessionInUrl` disabled, because this is a backend and has no browser session to keep. Queries made with `client` are bound to the anon role, so enable Row Level Security and write policies per table; reach for `admin` only for trusted server-side work.
+
+To get typed queries, generate the database types with `pnpm exec supabase gen types typescript --project-id <project-ref> > src/supabase/database.types.ts` and use `SupabaseClient<Database>` in `SupabaseService`.
+
+## Prisma
+
+Schema and migrations live in `prisma/`, the CLI is configured by `prisma.config.ts`, and the client is exposed through `PrismaService` (`src/prisma/prisma.service.ts`), registered globally by `PrismaModule`. Prisma 7 talks to PostgreSQL through the `@prisma/adapter-pg` driver adapter.
+
+Add the two connections to `.env` (see `.env.example`):
+
+| Variable | Used by | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | the app | Pooled connection (port `6543`), one pool shared by all requests |
+| `DIRECT_URL` | the CLI | Direct connection (port `5432`), used for migrations and introspection |
+
+Both come from **Supabase → Database → Connection string**. With `pnpm supabase:start` they are `postgresql://postgres:postgres@127.0.0.1:54322/postgres`.
+
+```bash
+$ pnpm db:migrate     # create/apply a migration while developing
+$ pnpm db:deploy      # apply pending migrations (CI/production)
+$ pnpm db:push        # sync the schema without a migration (prototyping)
+$ pnpm db:studio      # browse the database
+$ pnpm db:generate    # regenerate the client after editing the schema
+```
+
+`prisma generate` also runs on `pnpm install`, and the generated client is written to `src/generated/prisma` (git-ignored). The service opens the connection lazily on the first query, so booting the app or running tests does not require a reachable database.
+
+Use it from any provider by injecting `PrismaService`:
+
+```ts
+constructor(private readonly prisma: PrismaService) {}
+
+const plants = await this.prisma.plant.findMany();
+```
+
+Because Prisma connects with the database user, it **bypasses Supabase Row Level Security**. Keep per-user authorization in your queries (or use the `SupabaseService` client, which is RLS-aware) and never expose `PrismaService` to untrusted input without filtering.
+
+> `prisma migrate dev` needs to create a shadow database. On a hosted Supabase project that may fail; run migrations against the local stack or a development branch, and apply them with `pnpm db:deploy` elsewhere.
+
 ## Compile and run the project
 
 ```bash
