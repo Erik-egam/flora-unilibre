@@ -1,0 +1,46 @@
+import { apiErrorResponse } from '@/lib/errors';
+import { json, noContent, parseId, parseJson } from '@/lib/http';
+import { getFamiliaService } from '@/modules/familia';
+import { updateFamiliaSchema } from '@/modules/familia/familia.schemas';
+
+export const runtime = 'nodejs';
+
+type RouteContext = { params: Promise<{ id: string }> };
+
+export async function GET(
+  _request: Request,
+  { params }: RouteContext,
+): Promise<Response> {
+  try {
+    const { id } = await params;
+    return json(await getFamiliaService().findOne(parseId(id)));
+  } catch (error) {
+    return apiErrorResponse(error);
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: RouteContext,
+): Promise<Response> {
+  try {
+    const { id } = await params;
+    const dto = await parseJson(request, updateFamiliaSchema);
+    return json(await getFamiliaService().update(parseId(id), dto));
+  } catch (error) {
+    return apiErrorResponse(error);
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: RouteContext,
+): Promise<Response> {
+  try {
+    const { id } = await params;
+    await getFamiliaService().remove(parseId(id));
+    return noContent();
+  } catch (error) {
+    return apiErrorResponse(error);
+  }
+}

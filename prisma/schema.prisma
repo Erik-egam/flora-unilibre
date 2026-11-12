@@ -1,0 +1,82 @@
+// Supabase is plain PostgreSQL, so no connection URL is needed here: the CLI
+// reads it from `prisma.config.ts` and the app passes it to the pg driver
+// adapter in `src/prisma/prisma.service.ts`.
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+
+  // Generated sources are git-ignored and rebuilt on install; run
+  // `pnpm db:generate` after editing this file.
+  output = "../src/generated/prisma"
+
+  runtime             = "nodejs"
+  moduleFormat        = "esm"
+  // Extensionless imports so Next's bundler resolves the generated `.ts`
+  // sources directly. With `.js`, Next looks for files that do not exist.
+  importFileExtension = ""
+}
+
+enum EstadoFlora {
+  vivo
+  enfermo
+  muerto
+  talado
+
+  @@map("estado_flora")
+}
+
+model Familia {
+  id          Int     @id @default(autoincrement())
+  nombre      String  @unique @db.VarChar(100)
+  descripcion String? @db.Text
+
+  especies Especie[]
+
+  @@map("familia")
+}
+
+model Especie {
+  id               Int     @id @default(autoincrement())
+  familiaId        Int     @map("familia_id")
+  nombreCientifico String  @unique @map("nombre_cientifico") @db.VarChar(150)
+  descripcion      String? @db.Text
+
+  familia Familia  @relation(fields: [familiaId], references: [id])
+  plantas Planta[]
+
+  @@index([familiaId])
+  @@map("especie")
+}
+
+model Planta {
+  id          Int     @id @default(autoincrement())
+  especieId   Int     @map("especie_id")
+  nombreComun String  @map("nombre_comun") @db.VarChar(100)
+  descripcion String? @db.Text
+  imgUrl      String? @map("img_url") @db.VarChar(500)
+
+  especie Especie @relation(fields: [especieId], references: [id])
+  flora   Flora[]
+
+  @@index([especieId])
+  @@map("planta")
+}
+
+model Flora {
+  /// Número de la placa física (ej: 50). Se asigna a mano: sin autoincrement.
+  id        Int         @id
+  plantaId  Int         @map("planta_id")
+  latitud   Decimal     @db.Decimal(9, 6)
+  longitud  Decimal     @db.Decimal(9, 6)
+  imgUrl    String?     @map("img_url") @db.VarChar(500)
+  estado    EstadoFlora @default(vivo)
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  planta Planta @relation(fields: [plantaId], references: [id])
+
+  @@index([plantaId])
+  @@map("flora")
+}

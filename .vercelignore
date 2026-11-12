@@ -1,0 +1,11 @@
+# Never upload real credentials: set them in the Vercel project settings.
+.env
+.env.*
+!.env.example
+
+.git
+.next
+coverage
+supabase/.temp
+*.log
+*.tsbuildinfo
